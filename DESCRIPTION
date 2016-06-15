@@ -1,0 +1,13 @@
+Package: myFun
+Type: Package
+Title: Personal functions
+Version: 1.0
+Date: 2016-06-14
+Authors@R: c(
+    person("Loaiza", "Osmar", role = c("cre","aut"), email='olloaizaq@unal.edu.co'),
+    person("Bojanowski", "Michal", role = "ctb"),
+    person("Rendahl", "Aaron", role = "ctb"),
+    person("Schwartz", "Marc", role = "ctb")) 	
+Maintainer: Osmar Loaiza <olloaizaq@unal.edu.co>
+Description: I use this package as personal brewery of functions to feed other packages
+License: GPL-3

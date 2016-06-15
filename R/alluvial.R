@@ -1,0 +1,131 @@
+alluvial <-
+function( ..., freq,
+                      col="gray", border=0, layer, hide=FALSE, alpha=0.5,
+                      gap.width=0.05, xw=0.1, cw=0.1, las=0, srt=90,
+                      blocks = TRUE, pct=FALSE, sep='\n', xlabels=NULL)
+{
+  # Data and graphical parameters
+  p <- data.frame( ..., freq=freq, col, alpha, border, hide, stringsAsFactors=FALSE)
+  n <- nrow(p)
+  # Layers determine plotting order
+  if(missing(layer))
+  {
+    layer <- 1:n
+  }
+  p$layer <- layer
+  np <- ncol(p) - 6                    # Number of dimensions
+  d <- p[ , 1:np, drop=FALSE]          # Dimensions dframe
+  p <- p[ , -c(1:np), drop=FALSE]      # Parameteres dframe
+  p$freq <- with(p, freq/sum(freq))    # Frequencies (weights)
+  # Converting colors to hexcodes
+  col <- col2rgb(p$col, alpha=TRUE)
+  if(!identical(alpha, FALSE)) {
+    col["alpha", ] <- p$alpha*256
+  }
+  p$col <- apply(col, 2, function(x) do.call(rgb, c(as.list(x), maxColorValue = 256)))
+  # convert character vectors in data to factors
+  isch <- sapply(d, is.character)
+  d[isch] <- lapply(d[isch], as.factor)
+  # Convert blocks to vector
+  if (length(blocks) == 1)
+  {
+    blocks <- if (!is.na(as.logical(blocks)))
+    {
+      rep(blocks, np)
+    } else if (blocks == "bookends")
+    {
+      c(TRUE, rep(FALSE, np - 2), TRUE)
+    }
+  }
+  # Compute endpoints of flows (polygons)
+  # i = dimension id
+  # d = data frame of dimensions
+  # f = weights
+  # w = gap between categories
+  getp <- function(i, d, f, w=gap.width) {
+    # Ordering dimension ids for lexicographic sorting
+    a <- c(i, (1:ncol(d))[-i])
+    # Order of rows of d starting from i-th dimension
+    o <- do.call(order, d[a])
+    # Breakpoints on a dimension
+    x <- c(0, cumsum(f[o])) * (1-w)
+    # Stripe coordinates on a dimension
+    x <- cbind(x[-length(x)], x[-1])
+    # By how much stripes need to be shifted upwards (gap/max(gap))
+    gap <- cumsum( c(0L, diff(as.numeric(d[o,i])) != 0) )
+    mx <- max(gap)
+    if (mx == 0) mx <- 1
+    # shifts
+    gap <- gap / mx * w
+    # add gap-related shifts to stripe coordinates on dimension i
+    (x + gap)[order(o),]
+  }
+  # Calculate stripe locations on dimensions: list of data frames. A component
+  # for a dimension. Data frame contains 'y' locations of stripes.
+  dd <- lapply(seq_along(d), getp, d=d, f=p$freq)
+  # Plotting
+  #op <- par(mar=c(4, 1, 1, 1))
+  plot(NULL, type="n", xlim=c(1-cw, np+cw), ylim=c(0, 1), xaxt="n", yaxt="n",
+       xaxs="i", yaxs="i", xlab='', ylab='', frame=FALSE)
+  # For every stripe
+  ind <- which(!p$hide)[rev(order(p[!p$hide, ]$layer))]
+  for(i in ind )
+  {
+    # For every inter-dimensional segment
+    for(j in 1:(np-1) )
+    {
+      # Draw stripe
+      xspline( c(j, j, j+xw, j+1-xw, j+1, j+1, j+1-xw, j+xw, j) + rep(c(cw, -cw, cw), c(3, 4, 2)),
+               c( dd[[j]][i, c(1, 2, 2)], rev(dd[[j+1]][i, c(1, 1, 2, 2)]), dd[[j]][i,c(1, 1)]), 
+               shape = c(0,0,1,1,0,0,1,1,0, 0),
+               open=FALSE,
+               col=p$col[i], border=p$border[i])
+    }
+  }
+  # Category blocks with labels
+  for(j in seq_along(dd))
+  {
+    ax <- lapply(split(dd[[j]], d[,j]), range)
+    if (blocks[j])
+    {
+      for(k in seq_along(ax))
+      {
+        rect( j-cw, ax[[k]][1], j+cw, ax[[k]][2] )
+      }
+    } else
+    {
+      for (i in ind)
+      {
+        x <- j + c(-1, 1) * cw
+        y <- t(dd[[j]][c(i, i), ])
+        w <- xw * (x[2] - x[1])
+        xspline(x = c(x[1], x[1], x[1] + w, x[2] - w,
+                      x[2], x[2], x[2] - w, x[1] + w, x[1]),
+                y = c(y[c(1, 2, 2), 1], y[c(2, 2, 1, 1), 2], y[c(1, 1), 1]),
+                shape = c(0, 0, 1, 1, 0, 0, 1, 1, 0, 0),
+                open = FALSE, col = p$col[i], border = p$border[i])
+      }
+    }
+    
+    frq <- round( sapply(split(p$freq*100, d[,j]), sum), 1 )
+    frq <- paste( names(ax), frq, sep=sep)
+    for(k in seq_along(ax))
+    {
+      if(pct==FALSE){ 
+        text( j, mean(ax[[k]]), labels=names(ax)[k], srt=srt)
+      }else{
+        text( j, mean(ax[[k]]), labels=frq[k], srt=srt)
+      }
+    }
+  }           
+  # X axis
+  axis(1, at= rep(c(-cw, cw), ncol(d)) + rep(seq_along(d), each=2),
+       line=0.5, col="white", col.ticks="black", labels=FALSE)
+  axis(1, at=seq_along(d), tick=FALSE,
+       labels=if(is.null(xlabels)){names(d)} else{xlabels}, las=las)
+#  par(op)
+}
+
+#Taken from:
+#https://github.com/mbojan/alluvial/blob/master/R/alluvial.R
+#http://stats.stackexchange.com/questions/12029/is-it-possible-to-create-parallel-sets-plot-using-r
